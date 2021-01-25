@@ -1,0 +1,12 @@
+# authorization
+setup/auth.json
+
+# node stuff
+/node_modules
+setup/package-lock.json
+
+# private things that i dont want on the internet
+data/botdire.json
+schedule.js
+/server
+times.js
