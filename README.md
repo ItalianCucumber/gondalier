@@ -2,6 +2,8 @@
 
 Gondalier is a Discord bot intended for general use functions such as random number generator, reminders, &amp;c. Uses Discordjs and Nodejs.
 
+![png](gondalier.png)
+
 ## what you need
 * [nodejs](https://nodejs.org/en/) installed
 * [discordjs](https://discord.js.org) module installed
