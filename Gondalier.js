@@ -1,42 +1,53 @@
-// imports init
-Discord = require('discord.js');
-client = new Discord.Client();
-logger = require('winston');
+// imports
+Discord = require('discord.js')
+Canvas = require('canvas')
+client = new Discord.Client()
+logger = require('winston')
 
 // data init
 
 botdire = require('./data/botdire.json')
-reminder = require('./data/reminder.json')
+UNITS = require('./data/units.js')
 
 // node.js init
 
 fs = require('fs')
-ffmpeg = require('ffmpeg-static');
-glob = require('glob');
+ffmpeg = require('ffmpeg-static')
+glob = require('glob')
 path = require('path')
+Colour = require('color')
+Qty = require('js-quantities')
+Sentiment = require('sentiment')
+
+// mongoDB init
+
+var {
+	MongoClient
+} = require('mongodb')
+url = require('./setup/url.js')
+mongo = new MongoClient(url)
 
 // setup init
 
 auth = require('./setup/auth.json');
 config = require('./setup/botconfig.json')
 
+// prefix
+p = config.prefix
+
 // commands init
 
-commands = {}
-commands['paninis'] = require('./commands/paninis.js')
-commands['prefix'] = require('./commands/prefix.js')
-commands['help'] = require('./commands/help.js')
-commands['suggest'] = require('./commands/suggest.js')
-commands['queue'] = require('./commands/queue.js')
-commands['vote'] = require('./commands/vote.js')
-commands['dice'] = require('./commands/dice.js')
-commands['remind'] = require('./commands/remind.js')
+fs.readdir("./commands", (err, files) => {
+	if (err) throw new Error(err)
+	commands = []
 
-// server init
+	files.forEach((file) => {
+		commands.push(require(`./commands/${file}`))
+	})
+})
 
-glob.sync('./server/*.js').forEach(function(file) {
-	require(path.resolve(file));
-});
+peco = require('./peco.js')
+warn = require('./warn.js')
 
 // configure logger settings
 
@@ -49,10 +60,13 @@ logger.level = 'debug';
 // initialize Discord bot
 
 client.on('ready', () => {
-	client.user.setActivity('the master race', {
-		type: 5
-	});
-	console.log('Successfully logged in.');
+	client.user.setPresence({
+		activity: {
+			name: 'the game'
+		},
+		status: 'dnd'
+	})
+	console.log(`%cSuccessfully logged in.`, 'font-weight: bold; color: lightgreen;');
 });
 
 bot = botdire.bot;
@@ -69,9 +83,16 @@ gondGitIcon = 'https://media.discordapp.net/attachments/713792176894509076/78719
 times = require('./times.js')
 schedule = require('./schedule.js')
 
-// vote init
+// music init
+loop = false
+shuffle = false
+shuffleP = false
+notify = true
+notifyP = true
+controls_embed = null
 
-t = [0, 0, 0]
+// reminder init
+Reminders = []
 
 // schedule interval
 
@@ -80,20 +101,12 @@ setInterval(() => {
 
 	schedule(rTime)
 
-	var rChat = client.channels.cache.get(reminder.channel);
-	if (reminder.isActive === true) {
+	for (var i = 0; i < Reminders.length; i++) {
+		reminder = Reminders[i]
+		var rChat = client.channels.cache.get(reminder.channel);
 		if (rTime.getHours() == reminder.hour && rTime.getMinutes() == reminder.minute && rTime.getSeconds() == 0) {
 			rChat.send(`<@${reminder.user}>, your reminder **${reminder.event}** has started`);
-			rJSON = {
-				"channel": "",
-				"user": "",
-				"hour": "",
-				"minute": "",
-				"event": "",
-				"isActive": false
-			}
-			rData = JSON.stringify(rJSON, null, 2)
-			fs.writeFileSync('./data/reminder.json', rData)
+			Reminders.splice(i, 1)
 		} else {
 			return;
 		}
@@ -102,37 +115,34 @@ setInterval(() => {
 
 client.on('message', msg => {
 
-	p = config.prefix;
+	if (msg.author.id == '643515430287310868') return
 
-	// command type functions
+	if (msg.content.startsWith(p)) {
+		var env = {
+			client: this,
+			message: msg,
+			args: msg.content
+				.substr(p.length)
+				.toLowerCase()
+				.split(" "),
+		}
 
-	function newCommand(name, func) {
-		if (msg.content.startsWith(`${p}` + name)) {
-			commands[func](msg)
+		// executor
+		for (let c of commands) {
+			if (c.aliases?.includes(env.args[0])) {
+				try {
+					c.execute(env)
+				} catch (error) {
+					msg.channel.send('```' + error + '```')
+				}
+			}
 		}
 	}
 
-	function newIncludes(string, func) {
-		if (msg.content.includes(string)) {
-			commands[func](msg)
-		}
+	if (msg.content === '<@!643515430287310868>' || msg.content === '<@643515430287310868>') {
+		msg.channel.send('My prefix is `' + `${p}` + '`, for a list of my commands, do `' + `${p}h` + '`.')
 	}
 
-
-
-
-	// general commands
-
-
-
-
-	newCommand('paninis', 'paninis') // test for bot
-	newIncludes('<@!643515430287310868>', 'prefix') // ask for prefix
-	newCommand('h', 'help') // help menu
-	newCommand('s ', 'suggest') // suggest for parliament
-	newCommand('q', 'queue') // queue for suggestions
-	newCommand('v ', 'vote') // voting for suggestions
-	newCommand('d', 'dice') // dice rolling / random number generator
-	newCommand('r ', 'remind') // reminders
-
+	// personal commands
+	peco(msg)
 });
